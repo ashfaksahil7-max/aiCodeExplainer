@@ -3,7 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import './App.css'; 
 import './index.css';
 
-const genAI = new GoogleGenerativeAI(import.meta.env.Gemini); // API Key Setup
+// 1. API Key initialize 
+const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY); 
 
 function App() {
   const [code, setCode] = useState("");
@@ -11,62 +12,60 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [targetLang, setTargetLang] = useState("Python");
 
-  // Function to handle Enter key press for "Explain Code"
   useEffect(() => {
     const handleKeyPress = (event) => {
-      if (event.key === 'Enter' && !event.shiftKey && code && !loading) {
-        event.preventDefault(); // Prevent new line in textarea
+      if (event.key === 'Enter' && event.ctrlKey && code && !loading) {
+        event.preventDefault();
         handleAIAction('explain');
       }
     };
     window.addEventListener('keydown', handleKeyPress);
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-    };
-  }, [code, loading]); // Re-run effect if code or loading state changes
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [code, loading]);
 
-const handleAIAction = async (taskType) => {
-  if (!code.trim()) return alert("Please enter some code!");
-  setLoading(true);
-  try {
-    // Model version 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-
-    const prompt = taskType === 'explain' 
-      ? `Explain this code logic line by line: \n${code}`
-      : `Convert this code to ${targetLang}: \n${code}`;
-
-    // Generate content call
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+  const handleAIAction = async (taskType) => {
+    if (!code.trim()) return alert("Please enter some code!");
     
-    if (text) {
+    setLoading(true);
+    setOutput("AI is thinking..."); 
+
+    try {
+      // 2. Model initialization 
+      const model = ai.getGenerativeModel({ model: "gemini-2.5-flash" },{apiVersion: "v1"});
+
+      const promptText = taskType === 'explain' 
+        ? `Explain this code logic line by line in simple terms: \n\n${code}`
+        : `Strictly convert this code to ${targetLang}. Only provide the code, no extra text: \n\n${code}`;
+
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: promptText }] }],
+      });
+
+      const response = await result.response;
+      const text = response.text();
+
       setOutput(text);
-    } else {
-      setOutput("AI could not generate a response. Try again.");
+
+    } catch (error) {
+      console.error("AI ERROR:", error);
+      // Checking API key "API key not valid" 
+      setOutput("Error: " + (error.message.includes("API key") ? "Invalid API Key. Please check your key." : error.message));
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("DETAILED ERROR:", error);
-    // User-friendly error message
-    setOutput("Connection Error: Please check if your API Key is active in Google AI Studio.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>aiCode</h1>
+        <h1>AICodeExplainer</h1>
         <p className="tagline">Your AI-powered Code Explainer & Converter</p>
       </header>
 
       <div className="input-section">
         <textarea
           className="code-input"
-          placeholder="Paste your code here and press Enter to Explain..."
+          placeholder="Paste your code here... (Ctrl + Enter to Explain)"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           rows="10"
@@ -77,7 +76,7 @@ const handleAIAction = async (taskType) => {
             onClick={() => handleAIAction('explain')}
             disabled={loading}
           >
-            {loading ? <span className="spinner"></span> : "Explain Code"}
+            {loading ? "Processing..." : "Explain Code"}
           </button>
 
           <div className="convert-group">
@@ -91,25 +90,26 @@ const handleAIAction = async (taskType) => {
               <option value="Java">Java</option>
               <option value="C++">C++</option>
               <option value="PHP">PHP</option>
-              <option value="Go">Go</option>
             </select>
             <button
               className="action-button convert-button"
               onClick={() => handleAIAction('convert')}
               disabled={loading}
             >
-              {loading ? <span className="spinner"></span> : `Convert to ${targetLang}`}
+              {loading ? "..." : `Convert to ${targetLang}`}
             </button>
           </div>
         </div>
       </div>
 
       {output && (
-        <div className="output-section fadeIn">
+        <div className="output-section">
           <h2>AI Response:</h2>
-          <pre className="code-output">
-            <code>{output}</code>
-          </pre>
+          <div className="code-output-container">
+            <pre className="code-output">
+              <code>{output}</code>
+            </pre>
+          </div>
         </div>
       )}
 
